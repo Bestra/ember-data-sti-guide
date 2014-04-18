@@ -62,33 +62,24 @@ Let's say we call `store.find('task', 5)` and we get back the following payload
 
 ```javascript
 {
-  grocery_task: {id: 5, parent_type: 'task', type: 'GroceryTask', user_id: 1},
+  task: {id: 5, type: 'GroceryTask', user_id: 1},
   users: [{id:1, name: 'Chris'}]
 }
 ```
-The payload could have an abitrary amount of sideloaded data in addition to the record we asked for, and ember has to pick out the 'primary record' to return to us.  Normally it's easy: ember uses the type we requested in `find()`, or 'task' in our case.  Unfortunately our API has returned 'grocery_task' so we need another way to pick out the primary record.  I've added a pa  
-**WHY ARE WE DOING THIS INSTEAD OF JUST RETURNING TASK**
+
+**Talk about overriding primaryTypeName**
 
 ```coffeescript
-# This is overridden because finding a 'task' and getting back a root key of 'author_task' will
+  # This is overridden because finding a 'task' and getting back a root key of 'author_task' will
   # break the isPrimary check.
   extractSingle: (store, primaryType, payload, recordId, requestType) ->
     payload = @normalizePayload(primaryType, payload)
-    primaryTypeName = primaryType.typeKey
+    primaryTypeName = 'task' #=========>Overriden from primaryType.typeKey
     primaryRecord = undefined
     for prop of payload
       typeName = @typeForRoot(prop)
       type = store.modelFor(typeName)
       isPrimary = type.typeKey is primaryTypeName
-      # =======>Custom check for primary type
-      if payload[prop].parent_type == 'task' && payload[prop].id == recordId
-        isPrimary = true
-        primaryType = type
-        primaryTypeName = type.typeKey
-      else
-        isPrimary = type.typeKey is primaryTypeName
-      # <=======Custom check for primary type
-      
       # legacy support for singular resources
       if isPrimary and Ember.typeOf(payload[prop]) isnt "array"
         primaryRecord = @normalize(primaryType, payload[prop], prop)
