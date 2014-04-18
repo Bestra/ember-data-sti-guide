@@ -3,12 +3,31 @@ ember-data-sti-guide
 
 The ins and outs of implementing STI via ember data
 
+Stuff that needs to happen in both directions
+==============
+
+###The adapter
+The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
+```coffeescript
+App.TaskAdapter = DS.ActiveModelAdapter.extend
+  pathForType: (type) ->
+    'tasks'
+```
 
 Getting data in
 ================
 
 ##Finding a task
-###You're going to need to override `push`
+You're going to need to override `push` on the store.  Why? Let's say you try to find a task from the store.  `@store.find('task', 1)`.  Internally this calls `store.findById()`, which in turn calls `@store.recordForId()` to initially look up the record. `recordForId` will _always_ return a record for the given type, __even if that record is empty__. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
+```
+store.find() in a nutshell:
+find -> findById -> recordForId (either finds the exiting record or puts an empty one into the store)
+                 -> fetchById (if the record is empty)
+                              -> (adapter makes ajax request)
+                              -> push
+```
+With STI, the type that we find isn't necessarily the type we're going to get back.  We could ask the store for a `Task` and we're going to get back a `GroceryTask`.  When the adapter returns its `GroceryTask` payload to push into the store, the `Task` that was created by the very first `recordForId` call is still in the store in an empty state, and we need to remove it. 
+
 ```coffeescript
 push: (type, data, _partial) ->
     oldType = type
