@@ -5,21 +5,44 @@ The ins and outs of dealing with STI via ember data
 
 ##STI?
 
-[Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box.
+[Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box. 
 
-Before we talk about _how_ to translate our STI models to Ember, let's clarify what we actually want to have happen.
-I'm going to use Tasks as our example model.
+Some quick notes on the tech stack we're using. 
+* Rails and ActiveModelSerializers
+* Ember Data and the ActiveModelAdapter/Serializer
+
+
+Before we talk about _how_ to translate our STI models to Ember, here are the assumptions I'm going to make about our API server. I'm going to use Tasks as our example model.
+
+1. Task is an ActiveRecord object and it has an arbitrary number of subclasses.
+
+```ruby
+  class Task < ActiveRecord::Base end
+  class GroceryTask < Task end
 ```
+
+2. All requests go to a `/tasks/` route (I'm only using a `TasksController` for everything task-related).
+3. The API will serialize any Task subtypes with a root key of `task` and include a `type` property.
+    
+    ```javascript
+    {
+      task: {id: 5, type: 'GroceryTask'} //single task
+      tasks: [{id: 5, type: 'GroceryTask'}] //array of tasks
+    }
+    ```
+
+In Ember I'll make a type hierarchy similar to the one in Rails.
+```javascript
 App.Task = DS.Model.extend({type: DS.attr('string')});
 App.GroceryTask = App.Task.extend();
 ```
-Conceiveably a `GroceryTask` will have `type: 'GroceryTask'`.
-* My API is only going to have one endpoint for anything task-related.  `store.find('task', 5)` and `someTask.save()` should hit `/tasks/*` regardless of which subtype it is.  `/grocery_tasks/` is no good.
+
+* Ember should use the `/tasks/` endpoint for anything task-related.  `store.find('task', 5)` and `someTask.save()` should hit `/tasks/*` regardless of which subtype it is.  `/grocery_tasks/` is no good.
 * When I ask the store for a Task by id, I could get back any subtype of Task (GroceryTask, DogWalkingTask, etc.)  If I have a GroceryTask with id=5 on the server, then `this.store.find('task', 5)` should return a GroceryTask.
 * Sideloaded Tasks should get put into the store as the correct type.
 
 ##All subtypes of Task should use the same route on the api.
-We can override adapter's `pathForType()` function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
+We can override the ActiveModelAdapter's `pathForType()` function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
 ```coffeescript
 App.TaskAdapter = DS.ActiveModelAdapter.extend
   pathForType: (type) ->
