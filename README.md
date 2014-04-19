@@ -42,7 +42,7 @@ App.GroceryTask = App.Task.extend();
 * Sideloaded Tasks should get put into the store as the correct type.
 
 ##All subtypes of Task should use the same route on the api.
-We can override the ActiveModelAdapter's `pathForType()` function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
+We can override the ActiveModelAdapter's [pathForType] (http://emberjs.com/api/data/classes/DS.ActiveModelAdapter.html#method_pathForType) function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
 ```coffeescript
 App.TaskAdapter = DS.ActiveModelAdapter.extend
   pathForType: (type) ->
@@ -50,20 +50,22 @@ App.TaskAdapter = DS.ActiveModelAdapter.extend
 ```
 
 ##When we find a task by id we should get the appropriate subtype.
-Take a deep breath.  You're going to need to extend `DS.Store`.
+Take a deep breath.  You're going to need to extend your [store's push function] (http://emberjs.com/api/data/classes/DS.Store.html#method_push).
 ###WAT
 Let's say you try to find a task from the store.  `@store.find('task', 1)`.  
 Internally this calls `store.findById()`, which in turn calls `@store.recordForId()` to initially look up the record. `recordForId` will _always_ return a record for the given type, __even if that record is empty__. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
 ```
 store.find() in a nutshell:
 find -> findById -> recordForId (either finds the exiting record or puts an empty one into the store)
-                 -> fetchById (if the record is empty)
-                              -> (adapter makes ajax request) -> extractSingle
-                                                                       -> push
+                 -> fetchRecord (if the record is empty)
+                              -> (adapter makes ajax request) 
+                              -> extractSingle
+                              -> push
                               
-function calls:  find('task', 5) -> findById -> recordForId -> fetchById -> Serializer.extractSingle -> push
+function calls:  find('task', 5) -> findById -> recordForId -> fetchRecord -> Serializer.extractSingle -> push
 Task record:                                      | Task:5                             |
 GroceryTask record:                                                                    | GroceryTask:5
+
 ```
 With STI, the type that we find isn't necessarily the type we're going to get back.  We could ask the store for a `Task` and we're going to get back a `GroceryTask`.  When the adapter returns its `GroceryTask` payload to push into the store, the `Task` that was created by the very first `recordForId` call is still in the store in an empty state, and we need to remove it. 
 
