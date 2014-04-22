@@ -55,10 +55,52 @@ App.TaskAdapter = DS.ActiveModelAdapter.extend
 ```
 
 ###Getting the appropriate subtype when we find a task by id.
-Take a deep breath.  You're going to need to extend your [store's push function] (http://emberjs.com/api/data/classes/DS.Store.html#method_push).
+This is going to take a little work.  First we're going to make a custom serializer for Tasks.  
+The Serializer's `extractSingle` is used called during store.find('task', id) with the payload from the server.  There are two places we need to add functionality.  
+Let's say we call `store.find('task', 5)` and we get back the following payload
+
+```javascript
+{
+  task: {id: 5, type: 'GroceryTask', user_id: 1},
+  users: [{id:1, name: 'Chris'}]
+}
+```
+`extractSingle` divides up the payload into two categories: the primary record and the rest.  The primary record is the thing we actually asked for, and the rest is data to be sideloaded.  The base implementation of `extractSingle` infers the key for the primary record from the type argument to `find`.  In the example payload above, since I called `store.find('task', 5)` the key for the primary record will be `task`.  There are other cases where the type name passed to find is going to be the name of a subtype, for instance `aGroceryTask.reload()`.  In that case Ember would look for a root key of `grocery_task:` and find nothing.  In the TaskSerializer we'll override the name of the primary record to always be 'task'. 
+
+```coffeescript
+  # This is overridden because finding a 'task' and getting back a root key of 'author_task' will
+  # break the isPrimary check.
+App.TaskSerializer = DS.ActiveModelSerializer.extend
+  extractSingle: (store, primaryType, payload, recordId, requestType) ->
+    payload = @normalizePayload(primaryType, payload)
+    primaryTypeName = 'task' #=========>Overriden from primaryType.typeKey
+    primaryRecord = undefined
+    for prop of payload
+      typeName = @typeForRoot(prop)
+      type = store.modelFor(typeName)
+      isPrimary = type.typeKey is primaryTypeName
+      # legacy support for singular resources
+      if isPrimary and Ember.typeOf(payload[prop]) isnt "array"
+        primaryRecord = @normalize(primaryType, payload[prop], prop)
+        continue
+
+      #jshint loopfunc:true
+      for hash in payload[prop]
+        # hash.foobar = 'hello!'
+        # ========>Custom check for STI type
+        typeName = if hash.type
+          @typeForRoot hash.type
+        else
+          @typeForRoot prop
+        # <=======Custom check for STI type
+        # NOTE: There's more unchanged code after this
+```
+
+The primary record gets returned from `extractSingle`, and the rest of the data 
+Take a deep breath.  You're going to need to extend your store's [push] method. (http://emberjs.com/api/data/classes/DS.Store.html#method_push).
 ###WAT
 Let's say you try to find a task from the store.  `store.find('task', 1)`.  What we actually want is _any subtype_ of Task with ID=1.  Ember doesn't know this out of the box.  It finds a `Task`, and is rather surprised when we get back a `GroceryTask`.   
-Internally this calls `store.findById()`, which in turn calls `store.recordForId()` to initially look up the record. `recordForId` __will always return a record for the type you asked to find, even if that record is empty__. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
+Internally this calls `store.findById()`, which in turn calls `store.recordForId()` to initially look up the record. `recordForId` will push an empty record into the store if one isn't already there.  Normally that empty record would simply get replaced by the record that's coming back from the adapter, but in our case the record coming back might be of a different type. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
 
 ```
 store.find() in a nutshell:
@@ -88,47 +130,6 @@ push: (type, data, _partial) ->
     @_super @modelFor(modelType), data, _partial
 ```
 
-##Sideloading tasks by type
-The Serializer's `extractSingle` is used called during store.find('task', id) with the payload from the server.  There are two places we need to add functionality.  
-Let's say we call `store.find('task', 5)` and we get back the following payload
-
-```javascript
-{
-  task: {id: 5, type: 'GroceryTask', user_id: 1},
-  users: [{id:1, name: 'Chris'}]
-}
-```
-`extractSingle` divides up the payload into two categories: the primaryRecord and the rest.  The primaryRecord is the thing we actually asked for, and the rest is data to be sideloaded.  The base implementation of `extractSingle` infers the key for the primaryRecord from the type argument to `find`.  In the example payload above, since I called `store.find('task', 5)` the key for the primaryRecord will be `task`.  There are other cases where the type name passed to find is going to be the name of a subtype, for instance `aGroceryTask.reload()`.  In that case Ember would look for a root key of `grocery_task:` and find nothing.  In the TaskSerializer we'll override the name of the primaryRecord to always be 'task'. 
-
-```coffeescript
-  # This is overridden because finding a 'task' and getting back a root key of 'author_task' will
-  # break the isPrimary check.
-App.TaskSerializer = DS.ActiveModelSerializer.extend
-  extractSingle: (store, primaryType, payload, recordId, requestType) ->
-    payload = @normalizePayload(primaryType, payload)
-    primaryTypeName = 'task' #=========>Overriden from primaryType.typeKey
-    primaryRecord = undefined
-    for prop of payload
-      typeName = @typeForRoot(prop)
-      type = store.modelFor(typeName)
-      isPrimary = type.typeKey is primaryTypeName
-      # legacy support for singular resources
-      if isPrimary and Ember.typeOf(payload[prop]) isnt "array"
-        primaryRecord = @normalize(primaryType, payload[prop], prop)
-        continue
-
-      #jshint loopfunc:true
-      for hash in payload[prop]
-        # hash.foobar = 'hello!'
-        # ========>Custom check for STI type
-        typeName = if hash.type
-          hash.qualified_type = hash.type
-          hash.type = hash.type.replace(/.+::/, '')
-          @typeForRoot hash.type
-        else
-          @typeForRoot prop
-        # <=======Custom check for STI type
-```
 ###Associations
 
 Sending data out
