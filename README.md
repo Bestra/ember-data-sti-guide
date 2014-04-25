@@ -88,6 +88,8 @@ will be normalized based on its type and immediately pushed into the store. In b
 to determine the 'type' of the record.
 
 __The Serializer Code__
+
+Despite all the code written below, the delta from the base implmentation is really small.  I've added 2 new methods (`extractTypeName` and `primaryTypeName`) and changed 3 lines of code inside `extractSingle`.  
 ```coffeescript
 App.ApplicationSerializer = DS.ActiveModelSerializer.extend
   # hash: the individual object in the payload, ie. {id: 5, type: 'GroceryTask'}
