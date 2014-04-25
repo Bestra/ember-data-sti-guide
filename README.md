@@ -89,7 +89,7 @@ to determine the 'type' of the record.
 
 __The Serializer Code__
 
-Despite all the code written below, the delta from the base implmentation is really small.  I've added 2 new methods (`extractTypeName` and `primaryTypeName`) and changed 3 lines of code inside `extractSingle`.  
+Despite all the code written below, the delta from the base implmentation is really small.  I've added 2 new methods (`extractTypeName` and `primaryTypeName`) and changed 3 lines of code inside `extractSingle`.
 ```coffeescript
 App.ApplicationSerializer = DS.ActiveModelSerializer.extend
   # hash: the individual object in the payload, ie. {id: 5, type: 'GroceryTask'}
@@ -106,7 +106,9 @@ App.ApplicationSerializer = DS.ActiveModelSerializer.extend
 
   extractSingle: (store, primaryType, payload, recordId, requestType) ->
     payload = @normalizePayload(primaryType, payload)
+    #***************************************************
     primaryTypeName = @primaryTypeName(primaryType) #<======= Change I
+    #***************************************************
     primaryRecord = undefined
     for prop of payload
       typeName = @typeForRoot(prop)
@@ -115,14 +117,18 @@ App.ApplicationSerializer = DS.ActiveModelSerializer.extend
       # legacy support for singular resources
       if isPrimary and Ember.typeOf(payload[prop]) isnt "array"
         hash = payload[prop]
+        #***************************************************
         typeName = @extractTypeName(prop, hash) #<========== Change II
+        #***************************************************
         primaryType = store.modelFor(typeName)
         primaryRecord = @normalize(primaryType, payload[prop], prop)
         continue
 
       #jshint loopfunc:true
       for hash in payload[prop]
+        #***************************************************
         typeName = @extractTypeName(prop, hash)#<=========== Change II
+        #***************************************************
         type = store.modelFor(typeName)
         typeSerializer = store.serializerFor(type)
         hash = typeSerializer.normalize(type, hash, prop)
