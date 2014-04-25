@@ -227,7 +227,7 @@ App.CalendarDay = DS.Model.extend({
   id: DS.attr(),
   date: DS.attr(),
   tasks: DS.hasMany({polymorphic: true})
-  })
+})
 ```
 Here's the payload CalendarDay will expect for the polymorphic association.
 ```javascript
