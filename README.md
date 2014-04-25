@@ -187,6 +187,10 @@ App.Store = DS.Store.extend
     @_super @modelFor(modelType), data, _partial
 ```
 
+###Fixing extractArray and pushPayload
+`extractArray` and `pushPayload` both need to set the correct model subtype before pushing data into the store.  You can find the implementations in the code.js file in the repo.
+
+
 Correctly Serializing Data
 =================
 
@@ -200,7 +204,45 @@ App.TaskSerializer = App.ApplicationSerializer.extend
         root = 'task'
         data[root] = this.serialize(record, options)
 ```
-Bonus: Polymorphic Assocations
+Polymorphic Assocations
 =================================
-* Given a CalendarDay that hasMany tasks, CalendarDay.tasks() should return a collection of subtypes of Task.  This isn't directly related to STI, but it's still necessary for our client app.
+Given a CalendarDay that hasMany tasks, CalendarDay.tasks() should return a collection of subtypes of Task.  This isn't directly related to STI, but it's still necessary for our client app.
+When Ember Data normalizes a polymorphic relationship it expects a different payload than usual.
+Here's a normal payload.
+```javascript
+  {
+    calendar_day: {
+                    id: 5,
+                    date: '3/10',
+                    task_ids: [1, 2] //embed task ids.
+                  },
+    //sideload tasks
+    tasks: [{id: 1, timeAlloted: 25},
+            {id: 2, timeAlloted: 30}]
+  }
+```
+Now say my CalendarDay has many subtypes of task.
+```javascript
+App.CalendarDay = DS.Model.extend({
+  id: DS.attr(),
+  date: DS.attr(),
+  tasks: DS.hasMany({polymorphic: true})
+  })
+```
+Here's the payload CalendarDay will expect for the polymorphic association.
+```javascript
+  {
+    calendar_day: {
+                    id: 5,
+                    date: '3/10',
+                    //embed objects with id and type
+                    tasks: [{id: 1, type: 'GroceryTask'},
+                            {id: 2, type: 'DogTask'}]
+                  },
+    //sideload tasks like usual
+    tasks: [{id: 1, type: 'GroceryTask', timeAlloted: 25, date: '3/10'},
+            {id: 2, type: 'DogTask', timeAlloted: 30, dog: 'Yeller'}]
+  }
+```
+
 
