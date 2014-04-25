@@ -67,12 +67,14 @@ Let's say we call `store.find('task', 5)` and we get back the following payload
 }
 ```
 The Serializer's `extractSingle` is used called during store.find('task', id) with the payload from the server.
-There are two places we need to add functionality, labeld Change I and Change II below.
+There are two places we need to add functionality, labeled Change I and Change II below.
 
 __Change I__
 
 First, take a look at the signature for `extractSingle.`
+
 `extractSingle: (store, primaryType, payload, recordId, requestType) ->`
+
 `extractSingle` divides up the payload into two categories: the primary record and sideloaded data. It infers the key for the
 primary record from its `primaryType` argument. When called via `store.find`, `primaryType` will be the
 same as the type argument to `find`.  In the example payload above, since I called `store.find('task', 5)`
@@ -80,10 +82,12 @@ the key for the primary record will be `task`.  If you reload a model, `extractS
 called with that model's type.  For `aGroceryTask.reload()`, `primaryType` will be `App.GroceryTask`, and `extractSingle` is going to look for the primary record under `grocery_task:`, which in our case is wrong. We'll make a hook in `ApplicationSerializer` that our `TaskSerializer` can override later.
 
 __Change II__
+
 The primary record will be normalized based on its type and returned the `find` method.  The sideloaded data
 will be normalized based on its type and immediately pushed into the store. In both cases we'll need to use some custom logic
 to determine the 'type' of the record.
 
+__The Serializer Code__
 ```coffeescript
 App.ApplicationSerializer = DS.ActiveModelSerializer.extend
   # hash: the individual object in the payload, ie. {id: 5, type: 'GroceryTask'}
@@ -140,9 +144,9 @@ App.TaskSerializer = App.ApplicationSerializer.extend
   primaryTypeName: (primaryType) ->
     'task'
 ```
-Great! Notice that all of the sideloaded records are getting pushed into the store with the correct type at the end of
+Great! All of the sideloaded records are getting pushed into the store with the correct type at the end of
 `extractSingle`.  What about the `primaryRecord`?
-Take a deep breath.  You're going to need to extend your store's [push] method. (http://emberjs.com/api/data/classes/DS.Store.html#method_push).
+Take a deep breath.  You're going to need to extend your store's [push](http://emberjs.com/api/data/classes/DS.Store.html#method_push) method.
 ###WAT
 Let's say you try to find a task from the store.  `store.find('task', 1)`.  What we actually want is _any subtype_ of Task with ID=1.  Ember doesn't know this out of the box.  It finds a `Task`, and is rather surprised when we get back a `GroceryTask`.
 Internally this calls `store.findById()`, which in turn calls `store.recordForId()` to initially look up the record.
