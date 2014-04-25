@@ -3,6 +3,14 @@ ember-data-sti-guide
 
 The ins and outs of dealing with STI via ember data
 
+##Welcome!
+This is very much a work in progress.  I'm trying to get down my thoughts and the code we've been using at the moment.  Things are still a little rough.  Main page examples are currently in coffeescript, but they'll be translated to javascript shortly.
+
+##What still doesn't work?
+There's no way to get a live record array from the store for multiple subtypes of a given model at the moment.
+If you need `this.store.all('foo')` to give you a filterable array of all of `App.Foo`'s subtypes you're out of luck.
+
+
 ##STI?
 
 [Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box.
@@ -194,7 +202,7 @@ App.Store = DS.Store.extend
 ```
 
 ###Fixing extractArray and pushPayload
-`extractArray` and `pushPayload` both need to set the correct model subtype before pushing data into the store.  You can find the implementations in the code.js file in the repo.
+`extractArray` and `pushPayload` both need to set the correct model subtype before pushing data into the store.  You can find the [implementations](../master/code.js) in the code.js file in the repo.
 
 
 Correctly Serializing Data
@@ -251,6 +259,6 @@ Here's the payload CalendarDay will expect for the polymorphic association.
   }
 ```
 
-If you're using ActiveModelSerializers you can use the included initializer (credit to @tonyWok).
+If you're using ActiveModelSerializers you can use the included [initializer](../master/active_model_serializer.rb) and mimic the [sample serializer](../master/polymorphic_serializer.rb) to embed ids and types for associations rather than just the ids.  
 
 
