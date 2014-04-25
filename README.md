@@ -5,9 +5,9 @@ The ins and outs of dealing with STI via ember data
 
 ##STI?
 
-[Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box. 
+[Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box.
 
-Some quick notes on the tech stack we're using. 
+Some quick notes on the tech stack we're using.
 * Rails and ActiveModelSerializers
 * Ember Data and the ActiveModelAdapter/Serializer
 
@@ -23,7 +23,7 @@ Before we talk about _how_ to translate our STI models to Ember, here are the as
 
 2. All requests go to a `/tasks/` route (I'm only using a `TasksController` for everything task-related).
 3. The API will serialize any Task subtypes with a root key of `task` and include a `type` property.
-    
+
     ```javascript
     {
       task: {id: 5, type: 'GroceryTask'} //single task
@@ -46,7 +46,7 @@ App.GroceryTask = App.Task.extend();
 ```
 
 
-###Getting all subtypes of Task to use the same route on the api.
+##Getting all subtypes of Task to use the same route on the api.
 We can override the ActiveModelAdapter's [pathForType] (http://emberjs.com/api/data/classes/DS.ActiveModelAdapter.html#method_pathForType) function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
 ```coffeescript
 App.TaskAdapter = DS.ActiveModelAdapter.extend
@@ -54,9 +54,10 @@ App.TaskAdapter = DS.ActiveModelAdapter.extend
     'tasks'
 ```
 
-###Getting the appropriate subtype when we find a task by id.
-This is going to take a little work.  First we're going to make a custom serializer for Tasks.  
-The Serializer's `extractSingle` is used called during store.find('task', id) with the payload from the server.  There are two places we need to add functionality.  
+##Getting the appropriate subtype when we find a task by id.
+This is going to take a little work.  First we're going to make a custom serializer for our application.  There are three methods to override: `extractSingle`, `extractArray`, and `pushPayload`.  We'll start with `extractSingle` and change the other methods in similar fashion.
+
+###extractSingle
 Let's say we call `store.find('task', 5)` and we get back the following payload
 
 ```javascript
@@ -65,15 +66,41 @@ Let's say we call `store.find('task', 5)` and we get back the following payload
   users: [{id:1, name: 'Chris'}]
 }
 ```
-`extractSingle` divides up the payload into two categories: the primary record and the rest.  The primary record is the thing we actually asked for, and the rest is data to be sideloaded.  The base implementation of `extractSingle` infers the key for the primary record from the type argument to `find`.  In the example payload above, since I called `store.find('task', 5)` the key for the primary record will be `task`.  There are other cases where the type name passed to find is going to be the name of a subtype, for instance `aGroceryTask.reload()`.  In that case Ember would look for a root key of `grocery_task:` and find nothing.  In the TaskSerializer we'll override the name of the primary record to always be 'task'. 
+The Serializer's `extractSingle` is used called during store.find('task', id) with the payload from the server.
+There are two places we need to add functionality, labeld Change I and Change II below.
+
+__Change I__
+
+First, take a look at the signature for `extractSingle.`
+`extractSingle: (store, primaryType, payload, recordId, requestType) ->`
+`extractSingle` divides up the payload into two categories: the primary record and sideloaded data. It infers the key for the
+primary record from its `primaryType` argument. When called via `store.find`, `primaryType` will be the
+same as the type argument to `find`.  In the example payload above, since I called `store.find('task', 5)`
+the key for the primary record will be `task`.  If you reload a model, `extractSingle` will be
+called with that model's type.  For `aGroceryTask.reload()`, `primaryType` will be `App.GroceryTask`, and `extractSingle` is going to look for the primary record under `grocery_task:`, which in our case is wrong. We'll make a hook in `ApplicationSerializer` that our `TaskSerializer` can override later.
+
+__Change II__
+The primary record will be normalized based on its type and returned the `find` method.  The sideloaded data
+will be normalized based on its type and immediately pushed into the store. In both cases we'll need to use some custom logic
+to determine the 'type' of the record.
 
 ```coffeescript
-  # This is overridden because finding a 'task' and getting back a root key of 'author_task' will
-  # break the isPrimary check.
-App.TaskSerializer = DS.ActiveModelSerializer.extend
+App.ApplicationSerializer = DS.ActiveModelSerializer.extend
+  # hash: the individual object in the payload, ie. {id: 5, type: 'GroceryTask'}
+  # prop: the root key for the payload, ie. 'task'
+  extractTypeName: (prop, hash) ->
+    if hash.type
+      @typeForRoot hash.type
+    else
+      @typeForRoot prop
+
+  # allow the sti serializers to override this easily.
+  primaryTypeName: (primaryType) ->
+    primaryType.typeKey
+
   extractSingle: (store, primaryType, payload, recordId, requestType) ->
     payload = @normalizePayload(primaryType, payload)
-    primaryTypeName = 'task' #=========>Overriden from primaryType.typeKey
+    primaryTypeName = @primaryTypeName(primaryType) #<======= Change I
     primaryRecord = undefined
     for prop of payload
       typeName = @typeForRoot(prop)
@@ -81,68 +108,93 @@ App.TaskSerializer = DS.ActiveModelSerializer.extend
       isPrimary = type.typeKey is primaryTypeName
       # legacy support for singular resources
       if isPrimary and Ember.typeOf(payload[prop]) isnt "array"
+        hash = payload[prop]
+        typeName = @extractTypeName(prop, hash) #<========== Change II
+        primaryType = store.modelFor(typeName)
         primaryRecord = @normalize(primaryType, payload[prop], prop)
         continue
 
       #jshint loopfunc:true
       for hash in payload[prop]
-        # hash.foobar = 'hello!'
-        # ========>Custom check for STI type
-        typeName = if hash.type
-          @typeForRoot hash.type
-        else
-          @typeForRoot prop
-        # <=======Custom check for STI type
-        # NOTE: There's more unchanged code after this
-```
+        typeName = @extractTypeName(prop, hash)#<=========== Change II
+        type = store.modelFor(typeName)
+        typeSerializer = store.serializerFor(type)
+        hash = typeSerializer.normalize(type, hash, prop)
+        isFirstCreatedRecord = isPrimary and not recordId and not primaryRecord
+        isUpdatedRecord = isPrimary and @coerceId(hash.id) is recordId
 
-The primary record gets returned from `extractSingle`, and the rest of the data 
+        # find the primary record.
+        #
+        # It's either:
+        # * the record with the same ID as the original request
+        # * in the case of a newly created record that didn't have an ID, the first
+        #   record in the Array
+        if isFirstCreatedRecord or isUpdatedRecord
+          primaryRecord = hash
+        else
+          store.push typeName, hash
+
+    primaryRecord
+
+App.TaskSerializer = App.ApplicationSerializer.extend
+  primaryTypeName: (primaryType) ->
+    'task'
+```
+Great! Notice that all of the sideloaded records are getting pushed into the store with the correct type at the end of
+`extractSingle`.  What about the `primaryRecord`?
 Take a deep breath.  You're going to need to extend your store's [push] method. (http://emberjs.com/api/data/classes/DS.Store.html#method_push).
 ###WAT
-Let's say you try to find a task from the store.  `store.find('task', 1)`.  What we actually want is _any subtype_ of Task with ID=1.  Ember doesn't know this out of the box.  It finds a `Task`, and is rather surprised when we get back a `GroceryTask`.   
-Internally this calls `store.findById()`, which in turn calls `store.recordForId()` to initially look up the record. `recordForId` will push an empty record into the store if one isn't already there.  Normally that empty record would simply get replaced by the record that's coming back from the adapter, but in our case the record coming back might be of a different type. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
+Let's say you try to find a task from the store.  `store.find('task', 1)`.  What we actually want is _any subtype_ of Task with ID=1.  Ember doesn't know this out of the box.  It finds a `Task`, and is rather surprised when we get back a `GroceryTask`.
+Internally this calls `store.findById()`, which in turn calls `store.recordForId()` to initially look up the record.
+`recordForId` will push an empty record into the store if one isn't already there.
+Normally that empty record would simply get replaced by the record that's coming back from the adapter, but in our case the record coming back might be of a different type. If you look for a `Task` and get back a `GroceryTask` there's going to be an old `Task` sitting in the store that needs to be destroyed.
 
 ```
 store.find() in a nutshell:
 find -> findById -> recordForId (either finds the exiting record or puts an empty one into the store)
                  -> fetchRecord (if the record is empty)
-                              -> (adapter makes ajax request) 
+                              -> (adapter makes ajax request)
                               -> extractSingle
                               -> push
-                              
-function calls:  find('task', 5) -> findById -> recordForId -> fetchRecord -> Serializer.extractSingle -> push
+
+function calls:  find('task', 5) -> findById -> recordForId -> fetchRecord -> Serializer.extractSingle -> push('task')
 Task record:                                      | Task:5                             |
 GroceryTask record:                                                                    | GroceryTask:5
 
 ```
-
-We need to make sure that the empty superclass record that was created by `recordForId` gets deleted.  The best place to do this is right before the record we really want gets pushed into the store. 
+`push`'s first argument is the type of the incoming record.  In our case it's not always going to be correct.
+We need to make sure that the correct subtype is always pushed into the store, even if that type differs from the type
+that `push` was called with.
+We also need to make sure that the empty superclass record that was created by `recordForId` gets deleted.  The best place to do this is right before the record we really want gets pushed into the store.
 
 ```coffeescript
-push: (type, data, _partial) ->
+App.Store = DS.Store.extend
+  adapter: '-active-model'
+  push: (type, data, _partial) ->
     oldType = type
     dataType = data.type
     modelType = oldType
-    if dataType && (@modelFor(oldType) != @modelFor(dataType))
-      genericTypeRecord = @recordForId(oldType, data.id) #find the original record made by recordForId
+    if dataType and (@modelFor(oldType) != @modelFor(dataType))
       modelType = dataType
-      @dematerializeRecord(genericTypeRecord)
+      if oldRecord = @getById(oldType, data.id) #get rid of the empty supertype
+        @dematerializeRecord(oldRecord)
     @_super @modelFor(modelType), data, _partial
 ```
 
-###Associations
-
-Sending data out
+Correctly Serializing Data
 =================
-###Serializing
 
-All subtypes of task will have the same root key
+When we save any subtype of task, it should be serialized under the root `task:`.
+We can easily do this by overriding the TaskSerializer's [serializeIntoHash](http://emberjs.com/api/data/classes/DS.RESTSerializer.html#method_serializeIntoHash) method.
 ```coffeescript
-serializeIntoHash: (data, type, record, options) ->
-      root = 'task'
-      data[root] = this.serialize(record, options)
+App.TaskSerializer = App.ApplicationSerializer.extend
+  primaryTypeName: (primaryType) ->
+    'task'
+  serializeIntoHash: (data, type, record, options) ->
+        root = 'task'
+        data[root] = this.serialize(record, options)
 ```
 Bonus: Polymorphic Assocations
 =================================
-* Given a CalendarDay that hasMany tasks, CalendarDay.tasks() should return a collection of subtypes of Task.  This isn't directly related to STI, but it's still necessary for our client app.  
+* Given a CalendarDay that hasMany tasks, CalendarDay.tasks() should return a collection of subtypes of Task.  This isn't directly related to STI, but it's still necessary for our client app.
 
