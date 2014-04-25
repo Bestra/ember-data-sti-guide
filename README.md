@@ -207,8 +207,8 @@ App.TaskSerializer = App.ApplicationSerializer.extend
   primaryTypeName: (primaryType) ->
     'task'
   serializeIntoHash: (data, type, record, options) ->
-        root = 'task'
-        data[root] = this.serialize(record, options)
+    root = 'task'
+    data[root] = this.serialize(record, options)
 ```
 Polymorphic Assocations
 =================================
@@ -233,7 +233,7 @@ App.CalendarDay = DS.Model.extend({
   id: DS.attr(),
   date: DS.attr(),
   tasks: DS.hasMany({polymorphic: true})
-  })
+})
 ```
 Here's the payload CalendarDay will expect for the polymorphic association.
 ```javascript
@@ -250,5 +250,7 @@ Here's the payload CalendarDay will expect for the polymorphic association.
             {id: 2, type: 'DogTask', timeAlloted: 30, dog: 'Yeller'}]
   }
 ```
+
+If you're using ActiveModelSerializers you can use the included initializer (credit to @tonyWok).
 
 
