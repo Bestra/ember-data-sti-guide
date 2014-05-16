@@ -3,14 +3,6 @@ ember-data-sti-guide
 
 The ins and outs of dealing with STI via ember data
 
-##Welcome!
-This is very much a work in progress.  I'm trying to get down my thoughts and the code we've been using at the moment.  Things are still a little rough.  Main page examples are currently in coffeescript, but they'll be translated to javascript shortly.
-
-##What still doesn't work?
-There's no way to get a live record array from the store for multiple subtypes of a given model at the moment.
-If you need `this.store.all('foo')` to give you a filterable array of all of `App.Foo`'s subtypes you're out of luck.
-
-
 ##STI?
 
 [Single Table Inheritance] (http://www.martinfowler.com/eaaCatalog/singleTableInheritance.html) can be very good for solving certain data modeling problems on the server.  If you've tried to translate your STI models over to Ember you'll also know that it's not something ember data does out of the box.
@@ -38,9 +30,20 @@ Before we talk about _how_ to translate our STI models to Ember, here are the as
       tasks: [{id: 5, type: 'GroceryTask'}] //array of tasks
     }
     ```
+##The mile-high todo list
+* Create a new `ApplicationSerializer` that overrides `extractSingle`, `extractArray`, and `pushPayload`.  Each method has to
+be modified to extract a task's `type` and use it appropriately when pushing data into the store.
+* Create a `TaskSerializer` that extends `ApplicationSerializer`.  Override `serializeIntoHash` to set the outgoing payload's root
+to `task` rather than a task subtype.
+* Create a `TaskAdapter` that overrides `pathForType` to be 'tasks'.  Every task subclass will need to use an adapter that
+extends the `TaskAdapter`.
+* Override the `Store`'s `push` method to always get the model type from `data.type` instead of deferring to the passed-in `type`.
+* Add a `findTask(id)` method to the store that finds any subclass of `Task`.
+* For any `Task` relationships use `polymorphic: true`.
+* Modify the Rails serializers to embed task ids and types in relationships rather than just the ids.
 ##Ember
 
-The Ember Store divides stores models in buckets based on the type of model (see the implementation of [recordForId](http://emberjs.com/api/data/classes/DS.Store.html#method_recordForId)).  It doesn't take subclasses into account.  For our implementation we didn't want to have to rewrite the store but rather try to satisfy the API's requirements with as few changes as possible relative to the existing code.  Once our models are in the Store they behave just like any other Model.  All the nasty stuff is confined to sending and recieving data from the API.  The stuff we're going to do isn't rocket science, but it touches the Adapter, Serializer, and Store in a few different places.  I'd highly recommend Tony Schneider's [Rainy Day Ember Data] (https://speakerdeck.com/tonywok/rainy-day-ember-data) presentation.  He lays out the parts of the serialization process very nicely.
+The Ember Store divides stores models in buckets based on the type of model (see the implementation of [recordForId](http://emberjs.com/api/data/classes/DS.Store.html#method_recordForId)).  Ember has no direct concept of a subtype, _per se_.  For our implementation we didn't want to have to rewrite the store but rather try to satisfy the API's requirements with as few changes as possible relative to the existing code.  Once our models are in the Store they behave just like any other Model.  All the nasty stuff is confined to sending and recieving data from the API.  The stuff we're going to do isn't rocket science, but it touches the Adapter, Serializer, and Store in a few different places.  I'd highly recommend Tony Schneider's [Rainy Day Ember Data] (https://speakerdeck.com/tonywok/rainy-day-ember-data) presentation.  He lays out the parts of the serialization process very nicely.
 
 Reiterating what we want to happen:
 * Ember should use the `/tasks/` endpoint for anything task-related.  `store.find('task', 5)` and `someTask.save()` should hit `/tasks/*` regardless of which subtype it is.  `/grocery_tasks/` is no good.
@@ -57,6 +60,7 @@ App.GroceryTask = App.Task.extend();
 ##Getting all subtypes of Task to use the same route on the api.
 We can override the ActiveModelAdapter's [pathForType] (http://emberjs.com/api/data/classes/DS.ActiveModelAdapter.html#method_pathForType) function pretty easily. The adapter needs to use 'tasks' as its path to the api rather than 'grocery_tasks', etc.
 ```coffeescript
+
 App.TaskAdapter = DS.ActiveModelAdapter.extend
   pathForType: (type) ->
     'tasks'
@@ -259,6 +263,6 @@ Here's the payload CalendarDay will expect for the polymorphic association.
   }
 ```
 
-If you're using ActiveModelSerializers you can use the included [initializer](../master/active_model_serializer.rb) and mimic the [sample serializer](../master/polymorphic_serializer.rb) to embed ids and types for associations rather than just the ids.  
+If you're using ActiveModelSerializers you can use the included [initializer](../master/active_model_serializer.rb) and mimic the [sample serializer](../master/polymorphic_serializer.rb) to embed ids and types for associations rather than just the ids.
 
 
