@@ -30,6 +30,7 @@ Before we talk about _how_ to translate our STI models to Ember, here are the as
       tasks: [{id: 5, type: 'GroceryTask'}] //array of tasks
     }
     ```
+    
 ##The mile-high todo list
 * Create a new `ApplicationSerializer` that overrides `extractSingle`, `extractArray`, and `pushPayload`.  Each method has to
 be modified to extract a task's `type` and use it appropriately when pushing data into the store.
