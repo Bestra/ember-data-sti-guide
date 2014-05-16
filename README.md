@@ -267,4 +267,8 @@ Here's the payload CalendarDay will expect for the polymorphic association.
 
 If you're using ActiveModelSerializers you can use the included [initializer](../master/active_model_serializer.rb) and mimic the [sample serializer](../master/polymorphic_serializer.rb) to embed ids and types for associations rather than just the ids.
 
+##What's next
+This implementation has no analog for `store.all` or `store.filter`, both of which provide a live-updating record array. Right now we have to manually call `store.all` for each subtype and then coallesce them.
 
+##Go for it!
+I hope that by reading this post and the associated code you've gained some insight in how the store, serializers, and adapters work together to get data in and out of your app.  You can add a lot of flexibility through the exisiting hooks without having to resort to forking.  
