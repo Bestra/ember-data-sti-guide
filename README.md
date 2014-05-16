@@ -41,7 +41,8 @@ extends the `TaskAdapter`.
 * Add a `findTask(id)` method to the store that finds any subclass of `Task`.
 * For any `Task` relationships use `polymorphic: true`.
 * Modify the Rails serializers to embed task ids and types in relationships rather than just the ids.
-##Ember
+
+##Step by step
 
 The Ember Store divides stores models in buckets based on the type of model (see the implementation of [recordForId](http://emberjs.com/api/data/classes/DS.Store.html#method_recordForId)).  Ember has no direct concept of a subtype, _per se_.  For our implementation we didn't want to have to rewrite the store but rather try to satisfy the API's requirements with as few changes as possible relative to the existing code.  Once our models are in the Store they behave just like any other Model.  All the nasty stuff is confined to sending and recieving data from the API.  The stuff we're going to do isn't rocket science, but it touches the Adapter, Serializer, and Store in a few different places.  I'd highly recommend Tony Schneider's [Rainy Day Ember Data] (https://speakerdeck.com/tonywok/rainy-day-ember-data) presentation.  He lays out the parts of the serialization process very nicely.
 
